@@ -167,7 +167,12 @@ def contract(ctx: NumpyContext,
 
     try:
         if all_strings:
+            # The string form "->" with two operands is invalid for
+            # zeroth-order tensors (no subscripts). Handle separately.
+            if a.ndim == 0 and b.ndim == 0 and la == "" and lb == "" and lo == "":
+                return np.asarray(a * b)
             return np.einsum(f"{la},{lb}->{lo}", a, b, optimize=True)
+        # Integer-label form handles 0-d inputs correctly via [] subscripts.
         return np.einsum(a, la, b, lb, lo, optimize=True)
     except ValueError as exc:
         raise ValueError(f"contract: {exc}") from exc

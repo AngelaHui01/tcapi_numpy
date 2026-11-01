@@ -289,6 +289,46 @@ class TestLinearAlgebra:
         assert np.allclose(q.T @ q, np.eye(2), atol=1e-12)
 
 
+class TestZerothOrderLA:
+    def test_contract_two_vectors_to_zeroth(self, ctx):
+        """Contract two vectors with a shared index -> 0-d tensor."""
+        a = tcapi.fill(ctx, TEN, (3,), 2.0)
+        b = tcapi.fill(ctx, TEN, (3,), 3.0)
+        c = tcapi.contract(ctx, a, "i", b, "i", "")
+        assert c.shape == ()
+        assert c.ndim == 0
+        assert np.isclose(float(c), 18.0)
+
+    def test_trace_all_paired_returns_zeroth(self, ctx):
+        """Trace with all bonds paired on a 2nd-order tensor -> 0-d."""
+        a = tcapi.assign_from_range(
+            ctx, TEN, (2, 2),
+            [1.0, 2.0, 3.0, 4.0],
+            lambda c: 2 * c[0] + c[1],
+        )
+        t = tcapi.trace(ctx, a, ((0, 1),))
+        assert t.shape == ()
+        assert t.ndim == 0
+        assert np.isclose(float(t), 5.0)  # trace = 1 + 4
+
+    def test_contract_two_zeroth_tensors(self, ctx):
+        """Two 0-d tensors contracting with empty labels -> 0-d."""
+        a = tcapi.fill(ctx, TEN, (), 3.0)
+        b = tcapi.fill(ctx, TEN, (), 4.0)
+        c = tcapi.contract(ctx, a, "", b, "", "")
+        assert c.shape == ()
+        assert c.ndim == 0
+        assert np.isclose(float(c), 12.0)
+
+    def test_contract_zeroth_with_vector(self, ctx):
+        """0-d tensor contracting with a vector scales the vector."""
+        a = tcapi.fill(ctx, TEN, (), 5.0)
+        v = tcapi.fill(ctx, TEN, (3,), 2.0)
+        result = tcapi.contract(ctx, a, "", v, "i", "i")
+        assert result.shape == (3,)
+        assert np.allclose(result, [10.0, 10.0, 10.0])
+
+
 class TestInputImmutabilityLA:
     """Linear-algebra routines must not mutate their inputs."""
 

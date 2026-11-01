@@ -323,6 +323,64 @@ class TestStructuralOps:
         assert np.array_equal(b, expected)
 
 
+class TestZerothOrderManipulation:
+    def test_for_each_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN_F64, (), 10.0)
+        call_count = 0
+
+        def f(val):
+            nonlocal call_count
+            call_count += 1
+            return val * 2.0
+
+        b = tcapi.for_each(ctx, a, f)
+        assert call_count == 1
+        assert tcapi.get_elem(ctx, b, ()) == 20.0
+        assert tcapi.shape(ctx, b) == ()
+
+    def test_for_each_with_coors_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN_F64, (), 99.0)
+        results = {}
+
+        def f(val, coors):
+            results[coors] = val
+            return None
+
+        tcapi.for_each_with_coors(ctx, a, f)
+        assert results == {(): 99.0}
+
+    def test_expand_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.expand(ctx, a, {0: 1})
+
+    def test_shrink_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.shrink(ctx, a, {0: (0, 1)})
+
+    def test_extract_sub_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.extract_sub(ctx, a, ())
+
+    def test_replace_sub_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        sub = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.replace_sub(ctx, a, sub, ())
+
+    def test_concatenate_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.concatenate(ctx, [a, a], 0)
+
+    def test_stack_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.stack(ctx, [a, a], 0)
+
+
 class TestInputImmutability:
     """Verify that every TCAPI routine leaves its input tensors unmodified."""
 

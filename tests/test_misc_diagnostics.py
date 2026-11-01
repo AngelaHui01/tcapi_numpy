@@ -199,6 +199,53 @@ class TestToRange:
             tcapi.to_range(ctx, a, lambda _: 999)
 
 
+class TestZerothOrderMisc:
+    def test_to_range_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 42.0)
+        output = tcapi.to_range(ctx, a, lambda coors: 0)
+        assert len(output) == 1
+        assert output[0] == pytest.approx(42.0)
+
+    def test_assign_from_range_zeroth(self, ctx):
+        values = [7.0]
+        a = tcapi.assign_from_range(
+            ctx, TEN, (), values,
+            lambda coors: 0 if coors == () else -1,
+        )
+        assert tcapi.get_elem(ctx, a, ()) == 7.0
+
+    def test_for_each_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 10.0)
+        call_count = 0
+
+        def f(val):
+            nonlocal call_count
+            call_count += 1
+            return val + 1.0
+
+        b = tcapi.for_each(ctx, a, f)
+        assert call_count == 1
+        assert tcapi.get_elem(ctx, b, ()) == 11.0
+
+    def test_for_each_with_coors_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 5.0)
+        recorded = {}
+
+        def f(val, coors):
+            recorded[coors] = val
+            return None
+
+        tcapi.for_each_with_coors(ctx, a, f)
+        assert recorded == {(): 5.0}
+
+    def test_convert_preserves_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 3.14)
+        b = tcapi.convert(ctx, a, ctx, F32_TEN)
+        assert b.shape == ()
+        assert b.dtype == np.dtype(np.float32)
+        assert np.isclose(float(b), 3.14, atol=1e-6)
+
+
 class TestAssignFromRange:
     def test_basic(self, ctx):
         values = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
