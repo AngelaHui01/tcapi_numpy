@@ -136,6 +136,29 @@ class TestLinearAlgebra:
         assert tcapi.shape(ctx, sigma)[0] >= 2
         assert 0.0 <= trunc_err <= 1.0e-3
 
+    def test_trunc_svd_spec_example(self, ctx):
+        """Reproduce the spec-v2 example:
+        trunc_svd(ctx, a, 2, 6, 1e-12, 3, 1e-2) on a 3x4x5x6 tensor.
+        """
+        rng = np.random.default_rng(42)
+        a = tcapi.random(ctx, TEN, (3, 4, 5, 6), lambda: rng.uniform())
+
+        u, sigma, v_t, trunc_err = tcapi.trunc_svd(ctx, a, 2, 6, 1e-12, 3, 1e-2)
+
+        chi = tcapi.shape(ctx, sigma)[0]
+        assert 3 <= chi <= 6, f"chi {chi} not in [3, 6]"
+
+        # Verify trunc_err is consistent with discarded singular values
+        # by performing a full SVD.
+        u_full, sigma_full, _ = tcapi.svd(ctx, a, 2)
+        s_full = np.diag(sigma_full)
+        total_sq = float(np.sum(s_full ** 2))
+        expected_err = (
+            float(np.sum(s_full[chi:] ** 2)) / total_sq
+            if total_sq != 0.0 else 0.0
+        )
+        assert np.isclose(trunc_err, expected_err, atol=1e-12)
+
     def test_eigh_known_matrix(self, ctx):
         matrix = tcapi.assign_from_range(
             ctx,

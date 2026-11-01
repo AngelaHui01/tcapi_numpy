@@ -190,17 +190,32 @@ def trunc_svd(ctx: NumpyContext, a: np.ndarray,
               num_of_bds_as_row: int,
               chi_max: int,
               s_min: Real = 0.0,
-              *,
-              chi_min: int | None = None,
-              target_trunc_err: Real | None = None):
+              chi_min: int = 1,
+              target_trunc_err: Real = 0.0):
     """
     Supported forms:
-        trunc_svd(ctx, a, k, chi_max, s_min)
-        trunc_svd(ctx, a, k, chi_max, s_min,
-                  chi_min=m, target_trunc_err=e)
+        trunc_svd(ctx, a, k, chi_max, s_min)                                  # short form
+        trunc_svd(ctx, a, k, chi_max, s_min, chi_min, target_trunc_err)       # full form
 
-    Returns:
-        u, sigma, v_dag, trunc_err
+    Parameters
+    ----------
+    ctx : context handle.
+    a : tensor to decompose.
+    num_of_bds_as_row : number of leading axes grouped into the matrix row.
+    chi_max : maximum number of retained singular values (positive int).
+    s_min : discard singular values below this threshold (default 0.0).
+    chi_min : minimum number of retained singular values (default 1).
+    target_trunc_err : stop when the relative truncation error from discarding
+        singular values falls at or below this value (default 0.0).
+
+    The short form keeps all singular values ≥ s_min up to chi_max.
+    The full form keeps at least chi_min singular values, at most chi_max,
+    and returns the smallest number whose relative truncation error is
+    ≤ target_trunc_err (subject to the s_min pre-filter).
+
+    Returns
+    -------
+    u, sigma, v_dag, trunc_err
     """
     _check_ctx(ctx)
 
@@ -215,37 +230,25 @@ def trunc_svd(ctx: NumpyContext, a: np.ndarray,
     if s_min < 0:
         raise ValueError("trunc_svd: s_min must be nonnegative")
 
-    if chi_min is not None or target_trunc_err is not None:
-        if chi_min is None or target_trunc_err is None:
-            raise TypeError(
-                "trunc_svd: chi_min and target_trunc_err must both be "
-                "provided for the general truncation strategy"
-            )
+    if not isinstance(chi_min, Integral) or chi_min < 1:
+        raise ValueError(
+            "trunc_svd: chi_min must be a positive integer"
+        )
+    chi_min = int(chi_min)
 
-        if not isinstance(chi_min, Integral) or chi_min < 1:
-            raise ValueError(
-                "trunc_svd: chi_min must be a positive integer"
-            )
-        chi_min = int(chi_min)
+    if chi_min > chi_max:
+        raise ValueError(
+            "trunc_svd: chi_min must not exceed chi_max"
+        )
 
-        if chi_min > chi_max:
-            raise ValueError(
-                "trunc_svd: chi_min must not exceed chi_max"
-            )
-
-        if not isinstance(target_trunc_err, Real):
-            raise TypeError(
-                "trunc_svd: target_trunc_err must be real"
-            )
-        if target_trunc_err < 0:
-            raise ValueError(
-                "trunc_svd: target_trunc_err must be nonnegative"
-            )
-
-        general = True
-    else:
-        chi_min, target_trunc_err = 1, 0.0
-        general = False
+    if not isinstance(target_trunc_err, Real):
+        raise TypeError(
+            "trunc_svd: target_trunc_err must be real"
+        )
+    if target_trunc_err < 0:
+        raise ValueError(
+            "trunc_svd: target_trunc_err must be nonnegative"
+        )
 
     u, sigma, v_dag = svd(ctx, a, num_of_bds_as_row)
     s = np.diag(sigma)
@@ -253,23 +256,18 @@ def trunc_svd(ctx: NumpyContext, a: np.ndarray,
     total_sq = float(np.sum(s ** 2))
     survivors = int(np.count_nonzero(s >= s_min))
     max_keep = min(chi_max, survivors)
+    min_keep = min(chi_min, survivors)
+    keep = max_keep
 
-    if not general:
-        keep = max_keep
-    else:
-        # Never restore values discarded by the s_min cutoff.
-        min_keep = min(chi_min, survivors)
-        keep = max_keep
-
-        for candidate in range(min_keep, max_keep + 1):
-            discarded_sq = float(np.sum(s[candidate:] ** 2))
-            candidate_err = (
-                discarded_sq / total_sq
-                if total_sq != 0.0 else 0.0
-            )
-            if candidate_err <= target_trunc_err:
-                keep = candidate
-                break
+    for candidate in range(min_keep, max_keep + 1):
+        discarded_sq = float(np.sum(s[candidate:] ** 2))
+        candidate_err = (
+            discarded_sq / total_sq
+            if total_sq != 0.0 else 0.0
+        )
+        if candidate_err <= target_trunc_err:
+            keep = candidate
+            break
 
     discarded_sq = float(np.sum(s[keep:] ** 2))
     trunc_err = (
