@@ -287,3 +287,60 @@ class TestLinearAlgebra:
         assert q.shape == (2, 2)
         assert np.allclose(l @ q, matrix)
         assert np.allclose(q.T @ q, np.eye(2), atol=1e-12)
+
+
+class TestInputImmutabilityLA:
+    """Linear-algebra routines must not mutate their inputs."""
+
+    def snapshot(self, *tensors):
+        return [np.copy(t) for t in tensors]
+
+    def test_svd_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN, (2, 3),
+                                     [1., 2., 3., 4., 5., 6.],
+                                     lambda c: 3 * c[0] + c[1])
+        saved = self.snapshot(a)
+        tcapi.svd(ctx, a, 1)
+        assert np.array_equal(a, saved[0])
+
+    def test_trunc_svd_does_not_mutate(self, ctx):
+        rng = np.random.default_rng(42)
+        a = tcapi.random(ctx, TEN, (6, 6), lambda: rng.uniform())
+        saved = self.snapshot(a)
+        tcapi.trunc_svd(ctx, a, 1, 3, 0.0)
+        assert np.array_equal(a, saved[0])
+
+    def test_diag_does_not_mutate(self, ctx):
+        v = tcapi.assign_from_range(ctx, TEN, (3,), [1., 2., 3.],
+                                     lambda c: c[0])
+        saved = self.snapshot(v)
+        tcapi.diag(ctx, v)
+        assert np.array_equal(v, saved[0])
+
+    def test_trace_does_not_mutate(self, ctx):
+        rng = np.random.default_rng(0)
+        a = tcapi.random(ctx, TEN, (3, 4, 2, 4, 2), lambda: rng.uniform())
+        saved = self.snapshot(a)
+        tcapi.trace(ctx, a, ((1, 3), (2, 4)))
+        assert np.array_equal(a, saved[0])
+
+    def test_contract_does_not_mutate(self, ctx):
+        a = tcapi.eye(ctx, TEN, 3)
+        b = tcapi.fill(ctx, TEN, (3, 3), 2.0)
+        saved = self.snapshot(a, b)
+        tcapi.contract(ctx, a, "ij", b, "jk", "ik")
+        assert np.array_equal(a, saved[0])
+        assert np.array_equal(b, saved[1])
+
+    def test_normalize_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN, (2,), [3.0, 4.0],
+                                     lambda c: c[0])
+        saved = self.snapshot(a)
+        tcapi.normalize(ctx, a)
+        assert np.array_equal(a, saved[0])
+
+    def test_scale_does_not_mutate(self, ctx):
+        a = tcapi.fill(ctx, TEN, (3,), 2.0)
+        saved = self.snapshot(a)
+        tcapi.scale(ctx, a, 3.0)
+        assert np.array_equal(a, saved[0])

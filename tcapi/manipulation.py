@@ -29,7 +29,7 @@ def transpose(ctx: NumpyContext, a: np.ndarray,
         raise ValueError(
             "transpose: axes must be a permutation of the tensor dimensions"
         )
-    return np.transpose(a, tuple(new_order))
+    return np.transpose(a, tuple(new_order)).copy()
 
 def reshape(ctx: NumpyContext, a: np.ndarray,
             new_shape: Sequence[int]) -> np.ndarray:
@@ -46,7 +46,7 @@ def reshape(ctx: NumpyContext, a: np.ndarray,
             f"reshape: total size mismatch. Original size {a.size} "
             f"vs new shape {new_shape}"
         )
-    return a.reshape(new_shape)
+    return a.reshape(new_shape).copy()
 
 
 def cplx_conj(ctx: NumpyContext, a: np.ndarray) -> np.ndarray:
