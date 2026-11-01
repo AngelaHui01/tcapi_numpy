@@ -321,3 +321,148 @@ class TestStructuralOps:
         expected = np.zeros((4, 4))
         expected[1:3, 2:4] = 9.0
         assert np.array_equal(b, expected)
+
+
+class TestZerothOrderManipulation:
+    def test_for_each_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN_F64, (), 10.0)
+        call_count = 0
+
+        def f(val):
+            nonlocal call_count
+            call_count += 1
+            return val * 2.0
+
+        b = tcapi.for_each(ctx, a, f)
+        assert call_count == 1
+        assert tcapi.get_elem(ctx, b, ()) == 20.0
+        assert tcapi.shape(ctx, b) == ()
+
+    def test_for_each_with_coors_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN_F64, (), 99.0)
+        results = {}
+
+        def f(val, coors):
+            results[coors] = val
+            return None
+
+        tcapi.for_each_with_coors(ctx, a, f)
+        assert results == {(): 99.0}
+
+    def test_expand_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.expand(ctx, a, {0: 1})
+
+    def test_shrink_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.shrink(ctx, a, {0: (0, 1)})
+
+    def test_extract_sub_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.extract_sub(ctx, a, ())
+
+    def test_replace_sub_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        sub = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.replace_sub(ctx, a, sub, ())
+
+    def test_concatenate_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.concatenate(ctx, [a, a], 0)
+
+    def test_stack_zeroth_raises(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, ())
+        with pytest.raises(ValueError, match="zeroth-order"):
+            tcapi.stack(ctx, [a, a], 0)
+
+
+class TestInputImmutability:
+    """Verify that every TCAPI routine leaves its input tensors unmodified."""
+
+    def snapshot(self, *tensors):
+        return [np.copy(t) for t in tensors]
+
+    def test_transpose_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN_F64, (2, 3), range(6),
+                                     lambda c: 3 * c[0] + c[1])
+        saved = self.snapshot(a)
+        _ = tcapi.transpose(ctx, a, (1, 0))
+        assert np.array_equal(a, saved[0])
+
+    def test_reshape_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN_F64, (12,), range(12),
+                                     lambda c: c[0])
+        saved = self.snapshot(a)
+        _ = tcapi.reshape(ctx, a, (3, 4))
+        assert np.array_equal(a, saved[0])
+
+    def test_scale_does_not_mutate(self, ctx):
+        a = tcapi.fill(ctx, TEN_F64, (3,), 2.0)
+        saved = self.snapshot(a)
+        _ = tcapi.scale(ctx, a, 3.0)
+        assert np.array_equal(a, saved[0])
+
+    def test_normalize_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN_F64, (2,), [3.0, 4.0],
+                                     lambda c: c[0])
+        saved = self.snapshot(a)
+        _, _ = tcapi.normalize(ctx, a)
+        assert np.array_equal(a, saved[0])
+
+    def test_expand_does_not_mutate(self, ctx):
+        a = tcapi.fill(ctx, TEN_F64, (2, 2), 5.0)
+        saved = self.snapshot(a)
+        _ = tcapi.expand(ctx, a, {1: 2})
+        assert np.array_equal(a, saved[0])
+
+    def test_shrink_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN_F64, (3, 4), range(12),
+                                     lambda c: 4 * c[0] + c[1])
+        saved = self.snapshot(a)
+        _ = tcapi.shrink(ctx, a, {1: (1, 3)})
+        assert np.array_equal(a, saved[0])
+
+    def test_extract_sub_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN_F64, (4, 4), range(16),
+                                     lambda c: 4 * c[0] + c[1])
+        saved = self.snapshot(a)
+        _ = tcapi.extract_sub(ctx, a, ((1, 3), (2, 4)))
+        assert np.array_equal(a, saved[0])
+
+    def test_replace_sub_does_not_mutate(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, (4, 4))
+        sub = tcapi.fill(ctx, TEN_F64, (2, 2), 9.0)
+        saved = self.snapshot(a, sub)
+        _ = tcapi.replace_sub(ctx, a, sub, (1, 2))
+        assert np.array_equal(a, saved[0])
+        assert np.array_equal(sub, saved[1])
+
+    def test_for_each_does_not_mutate(self, ctx):
+        a = tcapi.fill(ctx, TEN_F64, (2, 3), 5.0)
+        saved = self.snapshot(a)
+        _ = tcapi.for_each(ctx, a, lambda v: v * 2.0)
+        assert np.array_equal(a, saved[0])
+
+    def test_for_each_with_coors_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN_F64, (2, 2), [1.0, 2.0, 3.0, 4.0],
+                                     lambda c: 2 * c[0] + c[1])
+        saved = self.snapshot(a)
+        _ = tcapi.for_each_with_coors(ctx, a, lambda v, c: v)
+        assert np.array_equal(a, saved[0])
+
+    def test_set_elem_does_not_mutate(self, ctx):
+        a = tcapi.zeros(ctx, TEN_F64, (3, 3))
+        saved = self.snapshot(a)
+        _ = tcapi.set_elem(ctx, a, (1, 2), 42.0)
+        assert np.array_equal(a, saved[0])
+
+    def test_copy_returns_deep_copy(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN_F64, (3,), range(3),
+                                     lambda c: c[0])
+        b = tcapi.copy(ctx, a)
+        assert not np.shares_memory(a, b)

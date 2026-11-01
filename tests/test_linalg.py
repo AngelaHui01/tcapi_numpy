@@ -136,6 +136,29 @@ class TestLinearAlgebra:
         assert tcapi.shape(ctx, sigma)[0] >= 2
         assert 0.0 <= trunc_err <= 1.0e-3
 
+    def test_trunc_svd_spec_example(self, ctx):
+        """Reproduce the spec-v2 example:
+        trunc_svd(ctx, a, 2, 6, 1e-12, 3, 1e-2) on a 3x4x5x6 tensor.
+        """
+        rng = np.random.default_rng(42)
+        a = tcapi.random(ctx, TEN, (3, 4, 5, 6), lambda: rng.uniform())
+
+        u, sigma, v_t, trunc_err = tcapi.trunc_svd(ctx, a, 2, 6, 1e-12, 3, 1e-2)
+
+        chi = tcapi.shape(ctx, sigma)[0]
+        assert 3 <= chi <= 6, f"chi {chi} not in [3, 6]"
+
+        # Verify trunc_err is consistent with discarded singular values
+        # by performing a full SVD.
+        u_full, sigma_full, _ = tcapi.svd(ctx, a, 2)
+        s_full = np.diag(sigma_full)
+        total_sq = float(np.sum(s_full ** 2))
+        expected_err = (
+            float(np.sum(s_full[chi:] ** 2)) / total_sq
+            if total_sq != 0.0 else 0.0
+        )
+        assert np.isclose(trunc_err, expected_err, atol=1e-12)
+
     def test_eigh_known_matrix(self, ctx):
         matrix = tcapi.assign_from_range(
             ctx,
@@ -264,3 +287,155 @@ class TestLinearAlgebra:
         assert q.shape == (2, 2)
         assert np.allclose(l @ q, matrix)
         assert np.allclose(q.T @ q, np.eye(2), atol=1e-12)
+
+
+class TestDiagonalTensors:
+    """Verify diagonal tensors are dense with zeros off the diagonal."""
+
+    def test_diag_from_vector_dense(self, ctx):
+        v = tcapi.assign_from_range(ctx, TEN, (3,), [1., 2., 3.],
+                                     lambda c: c[0])
+        d = tcapi.diag(ctx, v)
+        assert d.shape == (3, 3)
+        # Off-diagonals are exactly zero.
+        assert np.all(d[0, 1] == 0.0)
+        assert np.all(d[1, 0] == 0.0)
+        assert np.all(d[2, 1] == 0.0)
+        # Diagonal matches.
+        assert np.allclose(np.diag(d), v)
+
+    def test_eye_dense(self, ctx):
+        eye = tcapi.eye(ctx, TEN, 4)
+        assert eye.shape == (4, 4)
+        assert np.array_equal(eye, np.eye(4))
+        # Off-diagonals are exactly zero.
+        assert np.all(eye[0, 1] == 0.0)
+
+    def test_svd_sigma_dense_diagonal(self, ctx):
+        rng = np.random.default_rng(10)
+        a = tcapi.random(ctx, TEN, (3, 4), lambda: rng.uniform())
+        u, sigma, v_dag = tcapi.svd(ctx, a, 1)
+        # sigma is (chi, chi) with zeros off-diagonal.
+        assert sigma.shape[0] == sigma.shape[1]
+        chi = sigma.shape[0]
+        for i in range(chi):
+            for j in range(chi):
+                if i != j:
+                    assert sigma[i, j] == 0.0
+
+    def test_trunc_svd_sigma_dense_diagonal(self, ctx):
+        rng = np.random.default_rng(11)
+        a = tcapi.random(ctx, TEN, (6, 6), lambda: rng.uniform())
+        u, sigma, v_t, _ = tcapi.trunc_svd(ctx, a, 1, 4, 0.0)
+        assert sigma.shape[0] == sigma.shape[1]
+        chi = sigma.shape[0]
+        for i in range(chi):
+            for j in range(chi):
+                if i != j:
+                    assert sigma[i, j] == 0.0
+
+    def test_diagonal_tensor_size(self, ctx):
+        """A diagonal tensor of shape (N, N) has size N*N regardless of
+        storage."""
+        d = tcapi.diag(ctx, tcapi.assign_from_range(
+            ctx, TEN, (5,), range(5), lambda c: c[0],
+        ))
+        assert tcapi.size(ctx, d) == 25  # 5*5
+        assert tcapi.shape(ctx, d) == (5, 5)
+
+
+class TestZerothOrderLA:
+    def test_contract_two_vectors_to_zeroth(self, ctx):
+        """Contract two vectors with a shared index -> 0-d tensor."""
+        a = tcapi.fill(ctx, TEN, (3,), 2.0)
+        b = tcapi.fill(ctx, TEN, (3,), 3.0)
+        c = tcapi.contract(ctx, a, "i", b, "i", "")
+        assert c.shape == ()
+        assert c.ndim == 0
+        assert np.isclose(float(c), 18.0)
+
+    def test_trace_all_paired_returns_zeroth(self, ctx):
+        """Trace with all bonds paired on a 2nd-order tensor -> 0-d."""
+        a = tcapi.assign_from_range(
+            ctx, TEN, (2, 2),
+            [1.0, 2.0, 3.0, 4.0],
+            lambda c: 2 * c[0] + c[1],
+        )
+        t = tcapi.trace(ctx, a, ((0, 1),))
+        assert t.shape == ()
+        assert t.ndim == 0
+        assert np.isclose(float(t), 5.0)  # trace = 1 + 4
+
+    def test_contract_two_zeroth_tensors(self, ctx):
+        """Two 0-d tensors contracting with empty labels -> 0-d."""
+        a = tcapi.fill(ctx, TEN, (), 3.0)
+        b = tcapi.fill(ctx, TEN, (), 4.0)
+        c = tcapi.contract(ctx, a, "", b, "", "")
+        assert c.shape == ()
+        assert c.ndim == 0
+        assert np.isclose(float(c), 12.0)
+
+    def test_contract_zeroth_with_vector(self, ctx):
+        """0-d tensor contracting with a vector scales the vector."""
+        a = tcapi.fill(ctx, TEN, (), 5.0)
+        v = tcapi.fill(ctx, TEN, (3,), 2.0)
+        result = tcapi.contract(ctx, a, "", v, "i", "i")
+        assert result.shape == (3,)
+        assert np.allclose(result, [10.0, 10.0, 10.0])
+
+
+class TestInputImmutabilityLA:
+    """Linear-algebra routines must not mutate their inputs."""
+
+    def snapshot(self, *tensors):
+        return [np.copy(t) for t in tensors]
+
+    def test_svd_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN, (2, 3),
+                                     [1., 2., 3., 4., 5., 6.],
+                                     lambda c: 3 * c[0] + c[1])
+        saved = self.snapshot(a)
+        tcapi.svd(ctx, a, 1)
+        assert np.array_equal(a, saved[0])
+
+    def test_trunc_svd_does_not_mutate(self, ctx):
+        rng = np.random.default_rng(42)
+        a = tcapi.random(ctx, TEN, (6, 6), lambda: rng.uniform())
+        saved = self.snapshot(a)
+        tcapi.trunc_svd(ctx, a, 1, 3, 0.0)
+        assert np.array_equal(a, saved[0])
+
+    def test_diag_does_not_mutate(self, ctx):
+        v = tcapi.assign_from_range(ctx, TEN, (3,), [1., 2., 3.],
+                                     lambda c: c[0])
+        saved = self.snapshot(v)
+        tcapi.diag(ctx, v)
+        assert np.array_equal(v, saved[0])
+
+    def test_trace_does_not_mutate(self, ctx):
+        rng = np.random.default_rng(0)
+        a = tcapi.random(ctx, TEN, (3, 4, 2, 4, 2), lambda: rng.uniform())
+        saved = self.snapshot(a)
+        tcapi.trace(ctx, a, ((1, 3), (2, 4)))
+        assert np.array_equal(a, saved[0])
+
+    def test_contract_does_not_mutate(self, ctx):
+        a = tcapi.eye(ctx, TEN, 3)
+        b = tcapi.fill(ctx, TEN, (3, 3), 2.0)
+        saved = self.snapshot(a, b)
+        tcapi.contract(ctx, a, "ij", b, "jk", "ik")
+        assert np.array_equal(a, saved[0])
+        assert np.array_equal(b, saved[1])
+
+    def test_normalize_does_not_mutate(self, ctx):
+        a = tcapi.assign_from_range(ctx, TEN, (2,), [3.0, 4.0],
+                                     lambda c: c[0])
+        saved = self.snapshot(a)
+        tcapi.normalize(ctx, a)
+        assert np.array_equal(a, saved[0])
+
+    def test_scale_does_not_mutate(self, ctx):
+        a = tcapi.fill(ctx, TEN, (3,), 2.0)
+        saved = self.snapshot(a)
+        tcapi.scale(ctx, a, 3.0)
+        assert np.array_equal(a, saved[0])

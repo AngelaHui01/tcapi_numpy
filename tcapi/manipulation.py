@@ -29,7 +29,7 @@ def transpose(ctx: NumpyContext, a: np.ndarray,
         raise ValueError(
             "transpose: axes must be a permutation of the tensor dimensions"
         )
-    return np.transpose(a, tuple(new_order))
+    return np.transpose(a, tuple(new_order)).copy()
 
 def reshape(ctx: NumpyContext, a: np.ndarray,
             new_shape: Sequence[int]) -> np.ndarray:
@@ -46,7 +46,7 @@ def reshape(ctx: NumpyContext, a: np.ndarray,
             f"reshape: total size mismatch. Original size {a.size} "
             f"vs new shape {new_shape}"
         )
-    return a.reshape(new_shape)
+    return a.reshape(new_shape).copy()
 
 
 def cplx_conj(ctx: NumpyContext, a: np.ndarray) -> np.ndarray:
@@ -74,6 +74,8 @@ def imag(ctx: NumpyContext, a: np.ndarray) -> np.ndarray:
 def expand(ctx: NumpyContext, a: np.ndarray,
            bond_idx_increment_map: Mapping[int, int]) -> np.ndarray:
     _check_ctx(ctx)
+    if a.ndim == 0:
+        raise ValueError("expand: zeroth-order tensor has no bonds to expand")
 
     new_shape = list(a.shape)
     for bond_idx, increment in bond_idx_increment_map.items():
@@ -96,6 +98,8 @@ def expand(ctx: NumpyContext, a: np.ndarray,
 def shrink(ctx: NumpyContext, a: np.ndarray,
            bd_idx_el_coor_pair_map: Mapping[int, Sequence[int]]) -> np.ndarray:
     _check_ctx(ctx)
+    if a.ndim == 0:
+        raise ValueError("shrink: zeroth-order tensor has no bonds to shrink")
 
     selectors = [slice(None)] * a.ndim
     for bond_idx, bounds in bd_idx_el_coor_pair_map.items():
@@ -120,6 +124,8 @@ def shrink(ctx: NumpyContext, a: np.ndarray,
 def extract_sub(ctx: NumpyContext, a: np.ndarray,
                 coor_pairs: Sequence[Sequence[int]]) -> np.ndarray:
     _check_ctx(ctx)
+    if a.ndim == 0:
+        raise ValueError("extract_sub: zeroth-order tensor has no bonds to extract")
 
     if len(coor_pairs) != a.ndim:
         raise ValueError(
@@ -145,6 +151,8 @@ def extract_sub(ctx: NumpyContext, a: np.ndarray,
 def replace_sub(ctx: NumpyContext, a: np.ndarray, sub: np.ndarray,
                 begin_pt: Sequence[int]) -> np.ndarray:
     _check_ctx(ctx)
+    if a.ndim == 0:
+        raise ValueError("replace_sub: zeroth-order tensor has no bonds to replace")
 
     if len(begin_pt) != a.ndim or sub.ndim != a.ndim:
         raise ValueError(
@@ -172,6 +180,8 @@ def concatenate(ctx: NumpyContext, ins: Sequence[np.ndarray],
     _check_ctx(ctx)
     if not ins:
         raise ValueError("concatenate: tensor list must not be empty")
+    if ins[0].ndim == 0:
+        raise ValueError("concatenate: zeroth-order tensor has no bonds to concatenate")
     if not (0 <= concat_bdidx < ins[0].ndim):
         raise ValueError("concatenate: concat_bdidx is out of range")
 
@@ -201,6 +211,8 @@ def stack(ctx: NumpyContext, ins: Sequence[np.ndarray],
     _check_ctx(ctx)
     if not ins:
         raise ValueError("stack: tensor list must not be empty")
+    if ins[0].ndim == 0:
+        raise ValueError("stack: zeroth-order tensor has no bonds to stack")
     if not (0 <= stack_bdidx <= ins[0].ndim):
         raise ValueError("stack: stack_bdidx is out of range")
 

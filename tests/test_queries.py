@@ -114,3 +114,26 @@ class TestQueries:
         a = tensor_from_values(ctx, (2, 3, 4), range(24))
 
         assert tcapi.get_elem(ctx, a, (1, 2, 3)) == 23.0
+
+
+class TestZerothOrderQueries:
+    def test_order(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 1.0)
+        assert tcapi.order(ctx, a) == 0
+
+    def test_shape(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 1.0)
+        assert tcapi.shape(ctx, a) == ()
+
+    def test_size(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 1.0)
+        assert tcapi.size(ctx, a) == 1
+
+    def test_get_elem(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 3.14)
+        assert tcapi.get_elem(ctx, a, ()) == 3.14
+
+    def test_set_elem(self, ctx):
+        a = tcapi.zeros(ctx, TEN, ())
+        b = tcapi.set_elem(ctx, a, (), 99.0)
+        assert tcapi.get_elem(ctx, b, ()) == 99.0

@@ -83,7 +83,7 @@ def itebd_imaginary_time(
         gamma[a], sigma, gamma[b], trunc_err = tcapi.trunc_svd(ctx, theta, 2, chi, s_min)
         lam[a], _ = tcapi.normalize(ctx, tcapi.diag(ctx, sigma))
 
-        lam_b_inv = tcapi.diag(ctx, tcapi.for_each(ctx, lam[b], lambda elem: 1.0 / elem))
+        lam_b_inv = tcapi.diag(ctx, tcapi.for_each(ctx, tcapi.copy(ctx, lam[b]), lambda elem: 1.0 / elem))
         gamma[a] = tcapi.contract(ctx, lam_b_inv, "ij", gamma[a], "jkl", "ikl")
         gamma[b] = tcapi.contract(ctx, gamma[b], "ijk", lam_b_inv, "kl", "ijl")
 

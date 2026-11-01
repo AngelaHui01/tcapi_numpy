@@ -57,3 +57,40 @@ class TestTenKind:
         a = tcapi.zeros(ctx, F32Ten, (2, 3))
 
         assert tcapi.ten_kind(ctx, a) == F32Ten
+
+    # ── supported_ten_kinds ─────────────────────────────────────────── #
+    def test_supported_ten_kinds_is_tuple(self):
+        kinds = tcapi.supported_ten_kinds
+        assert isinstance(kinds, tuple)
+
+    def test_supported_ten_kinds_non_empty(self):
+        assert len(tcapi.supported_ten_kinds) > 0
+
+    def test_supported_ten_kinds_no_duplicates(self):
+        kinds = tcapi.supported_ten_kinds
+        assert len(kinds) == len(set(kinds))
+
+    def test_supported_ten_kinds_roundtrip_dtype(self):
+        for ten in tcapi.supported_ten_kinds:
+            assert tcapi.ten_kind_dtype(ten) == ten.dtype
+
+    def test_supported_ten_kinds_roundtrip_real_dtype(self):
+        for ten in tcapi.supported_ten_kinds:
+            assert tcapi.ten_kind_real_dtype(ten) == ten.real_dtype
+
+    def test_supported_ten_kinds_roundtrip_cplx_dtype(self):
+        for ten in tcapi.supported_ten_kinds:
+            assert tcapi.ten_kind_cplx_dtype(ten) == ten.cplx_dtype
+
+    def test_supported_ten_kinds_roundtrip_real_ten_kind(self):
+        for ten in tcapi.supported_ten_kinds:
+            assert tcapi.real_ten_kind(ten) == ten.real_ten_kind
+
+    def test_supported_ten_kinds_roundtrip_cplx_ten_kind(self):
+        for ten in tcapi.supported_ten_kinds:
+            assert tcapi.cplx_ten_kind(ten) == ten.cplx_ten_kind
+
+    def test_supported_ten_kinds_ten_kind_from_tensor(self, ctx):
+        for ten in tcapi.supported_ten_kinds:
+            t = tcapi.zeros(ctx, ten, (2, 2))
+            assert tcapi.ten_kind(ctx, t) == ten

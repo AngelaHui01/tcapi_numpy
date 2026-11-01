@@ -159,6 +159,34 @@ class TestConvert:
 
         assert b.dtype == np.dtype(np.float64)
 
+    def test_f32_to_f64_values_preserved(self, ctx):
+        a = tcapi.fill(ctx, F32_TEN, (3,), np.float32(3.14159))
+        b = tcapi.convert(ctx, a, ctx, TEN)
+        assert b.dtype == np.dtype(np.float64)
+        assert np.allclose(a, b.astype(np.float32))
+
+    def test_f64_to_f32_values_preserved(self, ctx):
+        a = tcapi.fill(ctx, TEN, (3,), 2.71828)
+        b = tcapi.convert(ctx, a, ctx, F32_TEN)
+        assert b.dtype == np.dtype(np.float32)
+        assert np.allclose(a, b.astype(np.float64), atol=1e-6)
+
+    def test_convert_ten_kind_correct(self, ctx):
+        a = tcapi.fill(ctx, TEN, (2,), 1.0)
+        b = tcapi.convert(ctx, a, ctx, F32_TEN)
+        assert tcapi.ten_kind(ctx, b) == F32_TEN
+
+    def test_convert_complex_to_real(self, ctx):
+        a = tcapi.fill(ctx, CPLX_TEN, (3,), 1 + 0j)
+        b = tcapi.convert(ctx, a, ctx, TEN)
+        assert b.dtype == np.dtype(np.float64)
+        assert np.allclose(b, 1.0)
+
+    def test_convert_real_to_complex_ten_kind(self, ctx):
+        a = tcapi.fill(ctx, TEN, (3,), 1.0)
+        b = tcapi.convert(ctx, a, ctx, CPLX_TEN)
+        assert tcapi.ten_kind(ctx, b) == CPLX_TEN
+
 
 class TestToRange:
     def test_roundtrip_with_assign_from_range(self, ctx):
@@ -197,6 +225,53 @@ class TestToRange:
 
         with pytest.raises(IndexError):
             tcapi.to_range(ctx, a, lambda _: 999)
+
+
+class TestZerothOrderMisc:
+    def test_to_range_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 42.0)
+        output = tcapi.to_range(ctx, a, lambda coors: 0)
+        assert len(output) == 1
+        assert output[0] == pytest.approx(42.0)
+
+    def test_assign_from_range_zeroth(self, ctx):
+        values = [7.0]
+        a = tcapi.assign_from_range(
+            ctx, TEN, (), values,
+            lambda coors: 0 if coors == () else -1,
+        )
+        assert tcapi.get_elem(ctx, a, ()) == 7.0
+
+    def test_for_each_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 10.0)
+        call_count = 0
+
+        def f(val):
+            nonlocal call_count
+            call_count += 1
+            return val + 1.0
+
+        b = tcapi.for_each(ctx, a, f)
+        assert call_count == 1
+        assert tcapi.get_elem(ctx, b, ()) == 11.0
+
+    def test_for_each_with_coors_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 5.0)
+        recorded = {}
+
+        def f(val, coors):
+            recorded[coors] = val
+            return None
+
+        tcapi.for_each_with_coors(ctx, a, f)
+        assert recorded == {(): 5.0}
+
+    def test_convert_preserves_zeroth(self, ctx):
+        a = tcapi.fill(ctx, TEN, (), 3.14)
+        b = tcapi.convert(ctx, a, ctx, F32_TEN)
+        assert b.shape == ()
+        assert b.dtype == np.dtype(np.float32)
+        assert np.isclose(float(b), 3.14, atol=1e-6)
 
 
 class TestAssignFromRange:

@@ -4,7 +4,8 @@ import numpy as np
 # ── Type system ──────────────────────────────────────────────────────────── #
 from .ten_kind     import (TenKind,
                            TenKindF32, TenKindF64,
-                           TenKindC64, TenKindC128)
+                           TenKindC64, TenKindC128,
+                           supported_ten_kinds)
 
 # ── Context ──────────────────────────────────────────────────────────────── #
 from .context      import NumpyContext

@@ -110,3 +110,6 @@ TenKindF32  = TenKind(np.float32)     # 32-bit real
 TenKindF64  = TenKind(np.float64)     # 64-bit real   ← recommended default
 TenKindC64  = TenKind(np.complex64)   # 32-bit complex
 TenKindC128 = TenKind(np.complex128)  # 64-bit complex
+
+# ── Supported kinds tuple (Appendix C.1) ────────────────────────────── #
+supported_ten_kinds: tuple = (TenKindF32, TenKindF64, TenKindC64, TenKindC128)

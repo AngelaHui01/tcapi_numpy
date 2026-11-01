@@ -16,10 +16,10 @@ def ctx():
 
 
 def test_itebd_imaginary_time_converges_to_tfim_ground_state(ctx):
-    J, g = 1.0, 0.5
+    J, g = 1.0, 1.0
     dt = 0.005
-    chi = 5
-    N = 3000
+    chi = 8
+    N = 8000
     d = 2
 
     h = itebd_tfim.make_tfim_two_site_hamiltonian(ctx, J, g)
@@ -39,6 +39,10 @@ def test_itebd_imaginary_time_converges_to_tfim_ground_state(ctx):
     print(f"absolute difference = {abs_diff:.3e}")
     print(f"final 100-iteration span = {stabilization_span:.3e}")
 
+    # Critical TFIM energy per site: J=1, g=1 → exact = ~ -4/π ≈ -1.2732395447.
+    # See Appendix A of arXiv:2512.23917v2.
+    # At the critical point, finite χ truncation introduces small residual
+    # fluctuations, so we use a relaxed stability threshold.
     assert np.isfinite(final_estimate)
     assert abs_diff < 1.0e-4
-    assert stabilization_span < 1.0e-8
+    assert stabilization_span < 1.0e-6
