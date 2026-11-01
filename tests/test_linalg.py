@@ -289,6 +289,61 @@ class TestLinearAlgebra:
         assert np.allclose(q.T @ q, np.eye(2), atol=1e-12)
 
 
+class TestDiagonalTensors:
+    """Verify diagonal tensors are dense with zeros off the diagonal."""
+
+    def test_diag_from_vector_dense(self, ctx):
+        v = tcapi.assign_from_range(ctx, TEN, (3,), [1., 2., 3.],
+                                     lambda c: c[0])
+        d = tcapi.diag(ctx, v)
+        assert d.shape == (3, 3)
+        # Off-diagonals are exactly zero.
+        assert np.all(d[0, 1] == 0.0)
+        assert np.all(d[1, 0] == 0.0)
+        assert np.all(d[2, 1] == 0.0)
+        # Diagonal matches.
+        assert np.allclose(np.diag(d), v)
+
+    def test_eye_dense(self, ctx):
+        eye = tcapi.eye(ctx, TEN, 4)
+        assert eye.shape == (4, 4)
+        assert np.array_equal(eye, np.eye(4))
+        # Off-diagonals are exactly zero.
+        assert np.all(eye[0, 1] == 0.0)
+
+    def test_svd_sigma_dense_diagonal(self, ctx):
+        rng = np.random.default_rng(10)
+        a = tcapi.random(ctx, TEN, (3, 4), lambda: rng.uniform())
+        u, sigma, v_dag = tcapi.svd(ctx, a, 1)
+        # sigma is (chi, chi) with zeros off-diagonal.
+        assert sigma.shape[0] == sigma.shape[1]
+        chi = sigma.shape[0]
+        for i in range(chi):
+            for j in range(chi):
+                if i != j:
+                    assert sigma[i, j] == 0.0
+
+    def test_trunc_svd_sigma_dense_diagonal(self, ctx):
+        rng = np.random.default_rng(11)
+        a = tcapi.random(ctx, TEN, (6, 6), lambda: rng.uniform())
+        u, sigma, v_t, _ = tcapi.trunc_svd(ctx, a, 1, 4, 0.0)
+        assert sigma.shape[0] == sigma.shape[1]
+        chi = sigma.shape[0]
+        for i in range(chi):
+            for j in range(chi):
+                if i != j:
+                    assert sigma[i, j] == 0.0
+
+    def test_diagonal_tensor_size(self, ctx):
+        """A diagonal tensor of shape (N, N) has size N*N regardless of
+        storage."""
+        d = tcapi.diag(ctx, tcapi.assign_from_range(
+            ctx, TEN, (5,), range(5), lambda c: c[0],
+        ))
+        assert tcapi.size(ctx, d) == 25  # 5*5
+        assert tcapi.shape(ctx, d) == (5, 5)
+
+
 class TestZerothOrderLA:
     def test_contract_two_vectors_to_zeroth(self, ctx):
         """Contract two vectors with a shared index -> 0-d tensor."""
