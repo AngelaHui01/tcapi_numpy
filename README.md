@@ -1,6 +1,6 @@
 # TCAPI - NumPy Backend
 
-[TCAPI (Tensor Computing API)](https://arxiv.org/abs/2512.23917) is a common tensor-computing interface for tensor-network applications. This repository provides a pure Python/NumPy backend that implements the TCAPI function set for dense tensors.
+[TCAPI (Tensor Computing API)](https://arxiv.org/abs/2512.23917v2) is a common tensor-computing interface for tensor-network applications. This repository provides a pure Python/NumPy backend that implements the TCAPI function set for dense tensors. The spec site lives at <https://tensorcomputingapi.github.io>.
 
 The installed Python package is named `tcapi`; the project distribution is `tcapi-numpy`.
 
@@ -149,6 +149,28 @@ uv run pytest tests/test_linalg.py
 # Build a wheel/sdist
 uv build
 ```
+
+## Changes for spec v2 (arXiv:2512.23917v2)
+
+These changes were applied to bring the implementation from the initial spec (v1,
+arXiv:2512.23917v1) up to v2. Unless noted, they are backward-compatible.
+
+### Breaking changes
+
+| Change | Details |
+|--------|---------|
+| `trunc_svd` argument order | **Old:** `(ctx, a, k, chi_min, chi_max, target_trunc_err, s_min)`. **New:** `(ctx, a, k, chi_max, s_min, chi_min=1, target_trunc_err=0.0)`. The short form `(ctx, a, k, chi_max, s_min)` is unchanged. |
+
+### New features
+
+| Feature | Details |
+|---------|---------|
+| `supported_ten_kinds` | Module attribute listing all `TenKind` descriptors in a fixed documented order. Every entry round-trips through `ten_kind_dtype`, `real_ten_kind`, etc. |
+| Zeroth-order tensors | Shape `()`, order 0, size 1. All constructors accept `()`. `contract` and `trace` return 0-d arrays when all bonds are contracted. Bond-based operations (`expand`, `shrink`, `extract_sub`, `replace_sub`, `concatenate`, `stack`) raise a clear error on 0-d input. |
+| Input immutability | Every TCAPI routine leaves its input tensors unmodified. `transpose` and `reshape` now return deep copies (views were possible before). |
+| `convert` precision conversion | `convert` supports all floating-point conversions (f32↔f64, real↔complex). Result `ten_kind` matches the target `TenKind`. |
+| Diagonal tensors | All routines that produce a diagonal tensor (`diag`, `eye`, `svd` sigma, `trunc_svd` sigma) return dense storage with zeros off the diagonal. `size()` of an (N, N) diagonal tensor is N². |
+| iTEBD example | Transverse field updated to `g=1.0` (critical point), matching Appendix A of the v2 paper. Explicit `tcapi.copy` used for `Lambda[B]`. |
 
 ## License
 This project is licensed under the [Apache License 2.0](LICENSE).
